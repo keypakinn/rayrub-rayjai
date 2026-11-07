@@ -39,6 +39,7 @@ async function start() {
 function registerSW() {
   if (!('serviceWorker' in navigator) || location.protocol === 'file:') return;
   navigator.serviceWorker.register('sw.js').then((reg) => {
+    UI.swReg = reg;
     const watch = (w) => {
       if (!w) return;
       w.addEventListener('statechange', () => {
@@ -57,7 +58,7 @@ function registerSW() {
   }).catch(() => {});
   let reloading = false;
   navigator.serviceWorker.addEventListener('controllerchange', () => {
-    if (reloading || !UI.updateWorker) return; // เปิดครั้งแรกไม่ต้องรีโหลด
+    if (reloading || !(UI.updateWorker || UI.applying)) return; // เปิดครั้งแรกไม่ต้องรีโหลด
     reloading = true; location.reload();
   });
 }

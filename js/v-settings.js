@@ -7,7 +7,7 @@ import { UI, on, onInput, onChange, registerView, registerSheet, render, renderS
 import { catName, isStandalone } from './common.js';
 import * as X from './excel.js';
 
-export const APP_VERSION = '1.3.0';
+export const APP_VERSION = '1.3.1';
 
 registerView('settings', () => {
   const st = D.settings;
@@ -15,7 +15,7 @@ registerView('settings', () => {
   const nExp = S.topCats('expense', true).length; const nInc = S.topCats('income', true).length;
   return `<div class="stack" style="gap:12px">
     <h1 class="h1" style="min-height:44px;display:flex;align-items:center">ตั้งค่า</h1>
-    ${UI.updateWorker ? `<button class="cell" data-a="applyUpdate" style="border:1px solid #23406A;border-radius:14px;background:var(--inc-soft);color:var(--inc-text)"><span style="flex:1">มีเวอร์ชันใหม่ แตะเพื่ออัปเดต · ข้อมูลเดิมไม่หาย</span><span>›</span></button>` : ''}
+    ${updateRow()}
     ${!isStandalone() ? `<button class="cell" data-a="installHelp" style="border-radius:14px;background:var(--exp-soft);color:var(--exp-text)"><span style="flex:1">ยังไม่ได้เพิ่มลงหน้าจอโฮม · ข้อมูลอาจถูก Safari ลบ</span><span>›</span></button>` : ''}
     <div class="section-title">การบันทึก</div>
     <div class="group">
@@ -51,7 +51,53 @@ async function storageInfo() {
 on('openSettingsInfo', storageInfo);
 export function settingsAfterRender() { if (UI.tab === 'settings') storageInfo(); }
 
-on('applyUpdate', () => { if (UI.updateWorker) UI.updateWorker.postMessage('skipWaiting'); });
+// ---------- อัปเดตแอป: ปุ่มถาวรในหน้าตั้งค่า ----------
+function updateRow() {
+  if (UI.updateWorker) {
+    return `<button class="cell" data-a="applyUpdate" style="border:1px solid #23406A;border-radius:14px;background:var(--inc-soft);color:var(--inc-text)">
+      <span style="flex:1;display:flex;flex-direction:column"><b style="font-weight:600">มีเวอร์ชันใหม่ · แตะเพื่ออัปเดต</b><span class="small">ข้อมูลเดิมไม่หาย</span></span><span>›</span></button>`;
+  }
+  return `<button class="cell" data-a="checkUpdate" ${UI.checking ? 'disabled' : ''} style="border-radius:14px;background:var(--s1);color:var(--muted)">
+    <span style="flex:1;display:flex;flex-direction:column"><span style="color:var(--text2)">${UI.checking ? 'กำลังเช็กอัปเดต…' : `เวอร์ชัน ${APP_VERSION} · ล่าสุดแล้ว`}</span><span class="small">แตะเพื่อเช็กอัปเดต</span></span><span>↻</span></button>`;
+}
+on('applyUpdate', () => {
+  if (!UI.updateWorker) return;
+  UI.applying = true;
+  UI.updateWorker.postMessage('skipWaiting');
+  setTimeout(() => location.reload(), 1500); // เผื่อ iPhone ไม่ส่งสัญญาณสลับเวอร์ชัน
+});
+on('checkUpdate', async () => {
+  const reg = UI.swReg || (navigator.serviceWorker && await navigator.serviceWorker.getRegistration());
+  if (!reg) { await reloadAppFiles(true); return; }
+  UI.checking = true; render();
+  try {
+    await reg.update();
+    // รอให้เวอร์ชันใหม่ดาวน์โหลดเสร็จ (สูงสุด ~8 วินาที)
+    for (let i = 0; i < 40 && !UI.updateWorker; i++) {
+      if (reg.waiting && navigator.serviceWorker.controller) { UI.updateWorker = reg.waiting; break; }
+      if (!reg.installing && i > 4) break;
+      await new Promise((r) => setTimeout(r, 200));
+    }
+  } catch (e) { /* ออฟไลน์ */ }
+  UI.checking = false; render();
+  if (UI.updateWorker) toast('พบเวอร์ชันใหม่ แตะแถบสีฟ้าเพื่ออัปเดต');
+  else {
+    const r = await ask({ title: 'เป็นเวอร์ชันล่าสุดแล้ว', body: `เวอร์ชัน ${APP_VERSION}\nถ้าเชื่อว่ามีเวอร์ชันใหม่แต่แอปหาไม่เจอ เลือก "โหลดไฟล์แอปใหม่" ได้ ข้อมูลที่บันทึกไว้ไม่หาย (ต้องต่อเน็ต)`, buttons: [{ label: 'โหลดไฟล์แอปใหม่', value: 'reload' }, { label: 'ตกลง', value: true, kind: 'primary' }] });
+    if (r.value === 'reload') await reloadAppFiles();
+  }
+});
+// ล้างเฉพาะไฟล์ของแอปที่เก็บไว้ (ไม่แตะข้อมูลใน IndexedDB) แล้วโหลดใหม่จากเว็บ
+async function reloadAppFiles(skipConfirm = false) {
+  if (!navigator.onLine) { toast('ต้องต่ออินเทอร์เน็ตก่อน'); return; }
+  if (!skipConfirm && !(await confirm('โหลดไฟล์แอปใหม่?', 'แอปจะดาวน์โหลดตัวเองใหม่จากเว็บ ข้อมูลที่บันทึกไว้ไม่หาย', 'โหลดใหม่'))) return;
+  try {
+    const regs = await navigator.serviceWorker.getRegistrations();
+    await Promise.all(regs.map((r) => r.unregister()));
+    const keys = await caches.keys();
+    await Promise.all(keys.filter((k) => k.startsWith('rr-')).map((k) => caches.delete(k)));
+  } catch (e) { /* ข้าม */ }
+  location.reload();
+}
 
 on('setTarget', async () => {
   const r = await ask({ title: 'เป้าใช้จ่ายต่อเดือน', body: 'เว้นว่างเพื่อไม่ตั้งเป้า', input: { value: D.settings.target ? String(D.settings.target) : '', inputmode: 'decimal', placeholder: 'เช่น 25000' }, buttons: [{ label: 'ยกเลิก', value: false }, { label: 'บันทึก', value: true, kind: 'primary' }] });

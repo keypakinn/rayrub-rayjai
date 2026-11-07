@@ -5,7 +5,7 @@ import { esc, num, thisMonth } from './util.js';
 export const UI = {
   tab: 'entry',
   sheet: null, // { kind, ...state }
-  updateWorker: null,
+  updateWorker: null, swReg: null, checking: false,
   views: {}, sheets: {},
 };
 
