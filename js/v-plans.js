@@ -47,7 +47,7 @@ registerView('plans', () => {
 
 // ---------- สร้างรายการผ่อน ----------
 on('newPlan', () => openSheet('planForm', {
-  name: '', mode: 'per', amountStr: '', count: 10, firstDate: U.today(), catId: null, subId: null,
+  name: '', note: '', mode: 'per', amountStr: '', count: 10, firstDate: U.today(), catId: null, subId: null,
   channelId: D.settings.planChannelId || D.settings.defaultChannelId,
 }));
 
@@ -69,6 +69,7 @@ registerSheet('planForm', (st) => {
     <div class="sheet-body">
       <div class="group">
         <label class="cell"><span class="lbl">ชื่อรายการ</span><input data-in="pf" data-f="name" value="${esc(st.name)}" placeholder="เช่น iPhone 17"></label>
+        <label class="cell"><span class="lbl">โน้ต</span><input data-in="pf" data-f="note" value="${esc(st.note)}" placeholder="ไม่บังคับ เช่น ค่าผ่อนมือถือ"></label>
         <div class="cell"><div class="seg" style="flex:1;background:var(--bg)">
           <button data-a="pfMode" data-v="per" aria-pressed="${st.mode === 'per'}">ยอดต่องวด</button>
           <button data-a="pfMode" data-v="total" aria-pressed="${st.mode === 'total'}">ยอดรวม</button></div></div>
@@ -110,7 +111,7 @@ on('planSave', async () => {
   const st = UI.sheet;
   const amount = parseFloat(st.amountStr);
   if (!st.name.trim() || !(amount > 0) || !(st.count >= 1)) return;
-  const p = await S.createPlan({ name: st.name.trim(), mode: st.mode, amount, count: st.count, firstDate: st.firstDate, catId: st.catId, subId: st.subId, channelId: st.channelId });
+  const p = await S.createPlan({ name: st.name.trim(), note: st.note.trim(), mode: st.mode, amount, count: st.count, firstDate: st.firstDate, catId: st.catId, subId: st.subId, channelId: st.channelId });
   toast(`สร้าง ${p.schedule.length} งวดแล้ว`);
   closeSheet();
 });
@@ -143,7 +144,7 @@ registerSheet('planDetail', (st) => {
 on('planEdit', () => {
   const p = S.plan(UI.sheet.id);
   const s = S.planStats(p);
-  openSheet('planEdit', { id: p.id, name: p.name, amountStr: String(s.next ? s.next.amount : ''), catId: p.catId, subId: p.subId, channelId: p.channelId });
+  openSheet('planEdit', { id: p.id, name: p.name, note: p.note || '', amountStr: String(s.next ? s.next.amount : ''), catId: p.catId, subId: p.subId, channelId: p.channelId });
 });
 registerSheet('planEdit', (st) => `<div class="sheet full">
   ${sheetHead('แก้ไขงวดที่ยังไม่ถึง', { left: 'ยกเลิก', leftA: 'planEditBack', right: 'บันทึก', rightA: 'planEditSave' })}
@@ -151,6 +152,7 @@ registerSheet('planEdit', (st) => `<div class="sheet full">
     <p class="small muted">มีผลเฉพาะงวดที่ยังไม่ถึงวัน งวดที่ผ่านไปแล้วไม่เปลี่ยน</p>
     <div class="group">
       <label class="cell"><span class="lbl">ชื่อรายการ</span><input data-in="pe" data-f="name" value="${esc(st.name)}"></label>
+      <label class="cell"><span class="lbl">โน้ต</span><input data-in="pe" data-f="note" value="${esc(st.note)}" placeholder="ไม่บังคับ"></label>
       <label class="cell"><span class="lbl">ยอดต่องวด (บาท)</span><input data-in="pe" data-f="amountStr" inputmode="decimal" value="${esc(st.amountStr)}" style="font-weight:600"></label>
       <label class="cell"><span class="lbl">หมวด</span><select data-ch="peCat">${optionsHtml(catOptions('expense', st.catId), st.catId || '', { none: 'รอจัดหมวด' })}</select></label>
       ${st.catId && subOptions(st.catId).length ? `<label class="cell"><span class="lbl">หมวดย่อย</span><select data-ch="peSub">${optionsHtml(subOptions(st.catId, st.subId), st.subId || '', { none: 'ไม่ระบุ' })}</select></label>` : ''}
@@ -166,7 +168,7 @@ on('planEditSave', async () => {
   const p = S.plan(st.id);
   const amount = parseFloat(String(st.amountStr).replace(/,/g, ''));
   if (!st.name.trim()) return;
-  await S.editPlanFuture(p, { name: st.name.trim(), amount: amount > 0 ? amount : null, catId: st.catId, subId: st.subId, channelId: st.channelId });
+  await S.editPlanFuture(p, { name: st.name.trim(), note: (st.note || '').trim(), amount: amount > 0 ? amount : null, catId: st.catId, subId: st.subId, channelId: st.channelId });
   toast('แก้ไขงวดที่เหลือแล้ว');
   openSheet('planDetail', { id: p.id });
 });

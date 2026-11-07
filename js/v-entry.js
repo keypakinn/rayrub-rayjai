@@ -3,13 +3,13 @@ import * as S from './store.js';
 import { D } from './store.js';
 import * as U from './util.js';
 import { esc } from './util.js';
-import { UI, on, onInput, onChange, registerView, render, afterRender, toast, ask, confirm, m, svg, ICON, goTab, openSheet } from './ui.js';
+import { UI, on, onInput, onChange, registerView, render, afterRender, toast, ask, confirm, m, svg, ICON, goTab, openSheet, updateLock } from './ui.js';
 import { catName, sumOf, channelOptions, isStandalone } from './common.js';
 
 export function freshEntry(type = 'expense') {
   return {
     type, expr: '', catId: null, subId: null, channelId: D.settings.defaultChannelId || null,
-    date: U.today(), note: '', noteFocus: false, catScroll: 0,
+    date: U.today(), note: '', noteFocus: false, catScroll: 0, saved: null,
   };
 }
 UI.entry = null;
@@ -129,9 +129,10 @@ registerView('entry', () => {
       <div class="ops">${[['⌫', 'ลบตัวอักษร'], ['÷', 'หาร'], ['×', 'คูณ'], ['−', 'ลบ'], ['+', 'บวก']].map(([k, l]) => `<button class="key" data-a="key" data-k="${k}" aria-label="${l}">${k}</button>`).join('')}</div>
       <div class="digits">${['7', '8', '9', '4', '5', '6', '1', '2', '3', '.', '0', '00'].map((k) => `<button class="key" data-a="key" data-k="${k}" ${k === '.' ? 'aria-label="จุดทศนิยม"' : ''}>${k}</button>`).join('')}</div>
     </div>
-    <button class="btn primary save ${e.type === 'income' ? 'income' : ''}" data-a="saveEntry" ${amt && amt > 0 ? '' : 'disabled'}>
+    ${e.saved && !e.expr ? `<div class="saved-bar" role="status"><span>✓ บันทึกแล้ว ${m(e.saved.amount)} · ${esc(e.saved.label)}</span><button data-a="undoSaved">เลิกทำ</button></div>`
+    : `<button class="btn primary save ${e.type === 'income' ? 'income' : ''}" data-a="saveEntry" ${amt && amt > 0 ? '' : 'disabled'}>
       ${amt && amt > 0 ? `บันทึก ${m(amt)}${e.catId ? '' : ' · รอจัดหมวด'}` : 'กรอกยอดเงิน'}${trip && e.type === 'expense' ? ' · ' + esc(trip.name) : ''}
-    </button>
+    </button>`}
   </div>`;
 });
 
@@ -155,7 +156,7 @@ afterRender(() => {
 
 // ---------- การกระทำ ----------
 function rerenderKeepNote() { render(); }
-on('key', (el) => { const e = E(); e.expr = U.calcInput(e.expr, el.dataset.k); render(); });
+on('key', (el) => { const e = E(); e.expr = U.calcInput(e.expr, el.dataset.k); e.saved = null; render(); });
 on('setType', (el) => { const e = E(); if (e.type === el.dataset.v) return; e.type = el.dataset.v; e.catId = null; e.subId = null; e.catScroll = 0; render(); });
 on('pickCat', (el) => { const e = E(); e.catId = e.catId === el.dataset.id ? null : el.dataset.id; e.subId = null; render(); });
 on('pickSub', (el) => { const e = E(); e.subId = el.dataset.id || null; render(); });
@@ -173,6 +174,7 @@ on('installHelp', () => ask({
 onInput('note', (el) => {
   const e = E(); e.note = el.value; e.noteFocus = true;
   document.getElementById('suggest').innerHTML = suggestHtml();
+  updateLock();
 });
 document.addEventListener('focusin', (ev) => { if (ev.target.id === 'note') { E().noteFocus = true; document.getElementById('suggest').innerHTML = suggestHtml(); } });
 document.addEventListener('focusout', (ev) => {
@@ -187,7 +189,24 @@ document.addEventListener('keydown', (ev) => { if (ev.target.id === 'note' && ev
 let persistAsked = false;
 function requestPersist() { if (persistAsked) return; persistAsked = true; navigator.storage?.persist?.().catch(() => {}); }
 
-export async function addTx(fields, { label } = {}) {
+// แสดงผลการบันทึกในตำแหน่งปุ่มบันทึก ~3 วินาที (ไม่มีกล่องเด้งบังเมนู)
+function showSaved(t, label) {
+  const e = E();
+  const s = { id: t.id, amount: t.amount, label };
+  e.saved = s;
+  render();
+  setTimeout(() => { if (UI.entry && UI.entry.saved === s) { UI.entry.saved = null; if (UI.tab === 'entry' && !UI.sheet) render(); } }, 3000);
+}
+on('undoSaved', async () => {
+  const e = E();
+  if (!e.saved) return;
+  await S.deleteTx([e.saved.id]);
+  e.saved = null;
+  render();
+  toast('ยกเลิกรายการแล้ว');
+});
+
+export async function addTx(fields, { label, silent = false } = {}) {
   const trip = S.activeTrip();
   const t = S.newTx({ ...fields, tripId: fields.type === 'expense' || fields.type === 'income' ? (trip ? trip.id : null) : null });
   const dup = S.findRecentDuplicate(t);
@@ -197,7 +216,7 @@ export async function addTx(fields, { label } = {}) {
   }
   await S.putTx(t);
   requestPersist();
-  toast(`บันทึกแล้ว ${m(t.amount)} · ${label || catName(t.catId)}`, { label: 'เลิกทำ', fn: async () => { await S.deleteTx([t.id]); toast('ยกเลิกรายการแล้ว'); render(); } });
+  if (!silent) toast(`บันทึกแล้ว ${m(t.amount)} · ${label || catName(t.catId)}`, { label: 'เลิกทำ', fn: async () => { await S.deleteTx([t.id]); toast('ยกเลิกรายการแล้ว'); render(); } });
   return t;
 }
 
@@ -205,10 +224,10 @@ on('saveEntry', async () => {
   const e = E();
   const amount = U.calcEval(e.expr);
   if (!amount || amount <= 0) return;
-  const t = await addTx({ type: e.type, amount, catId: e.catId, subId: e.subId, channelId: e.channelId, date: e.date, note: e.note.trim() });
+  const t = await addTx({ type: e.type, amount, catId: e.catId, subId: e.subId, channelId: e.channelId, date: e.date, note: e.note.trim() }, { silent: true });
   if (!t) return;
   UI.entry = freshEntry(e.type);
-  render();
+  showSaved(t, catName(t.catId));
 });
 
 on('useFav', async (el) => {
@@ -216,8 +235,8 @@ on('useFav', async (el) => {
   if (!f) return;
   const e = E();
   const c = f.catId && S.cat(f.catId);
-  const t = await addTx({ type: f.type, amount: f.amount, catId: c ? c.id : null, subId: f.subId && S.cat(f.subId) ? f.subId : null, channelId: f.channelId && S.channel(f.channelId) ? f.channelId : e.channelId, date: e.date, note: f.note }, { label: f.note });
-  if (t) render();
+  const t = await addTx({ type: f.type, amount: f.amount, catId: c ? c.id : null, subId: f.subId && S.cat(f.subId) ? f.subId : null, channelId: f.channelId && S.channel(f.channelId) ? f.channelId : e.channelId, date: e.date, note: f.note }, { label: f.note, silent: true });
+  if (t) showSaved(t, f.note);
 });
 
 on('addFav', async () => {

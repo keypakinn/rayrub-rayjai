@@ -1,5 +1,5 @@
 // ตัวช่วยที่หลายหน้าใช้ร่วมกัน
-import { D, cat, channel, trip, topCats, subCats, sortedChannels } from './store.js';
+import { D, cat, channel, trip, plan, topCats, subCats, sortedChannels, planAutoNote } from './store.js';
 import { esc, today, thisMonth } from './util.js';
 
 export const CAT_COLORS = ['#FF8A4C', '#C8925A', '#E36FA8', '#4CC38A', '#F2C14E', '#5AA9FF', '#8E9BFF', '#B37DFF', '#3CC6D0', '#7FB069', '#9AA0AA', '#F07167', '#56CFE1', '#E9C46A'];
@@ -20,7 +20,14 @@ export function txMeta(t) {
   if (t.channelId && channel(t.channelId)) parts.push(channel(t.channelId).name);
   return parts.join(' · ');
 }
-export function txTitle(t) { return t.note || (t.catId ? catName(t.catId) : 'ไม่มีโน้ต'); }
+export function txTitle(t) {
+  if (t.planSeq) {
+    const p = t.planId ? plan(t.planId) : null;
+    const auto = planAutoNote(p ? p.name : (t.planName || ''), t.planSeq);
+    return t.note ? `${t.note} - ${auto}` : auto;
+  }
+  return t.note || (t.catId ? catName(t.catId) : 'ไม่มีโน้ต');
+}
 export function tripName(id) { const t = id && trip(id); return t ? t.name : ''; }
 
 export function catOptions(type, includeHiddenId = null) {

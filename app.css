@@ -11,6 +11,8 @@
 }
 * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
 html, body { margin: 0; height: 100%; background: var(--bg); color: var(--text); }
+/* ล็อกตัวหน้าไม่ให้ Safari ดึงทั้งหน้าแล้วเด้ง: เลื่อนได้เฉพาะพื้นที่เนื้อหา (#view) */
+html, body { position: fixed; inset: 0; width: 100%; overflow: hidden; overscroll-behavior: none; touch-action: manipulation; }
 body {
   font-family: -apple-system, BlinkMacSystemFont, "Sukhumvit Set", "Thonburi", "Noto Sans Thai", system-ui, sans-serif;
   font-size: 15px; line-height: 1.4; overscroll-behavior: none; -webkit-user-select: none; user-select: none;
@@ -27,7 +29,8 @@ h1, h2, h3, p { margin: 0; }
 .money-exp { color: var(--exp-text); }
 
 #app { display: flex; flex-direction: column; height: 100vh; height: 100dvh; }
-#view { flex: 1; min-height: 0; overflow-y: auto; -webkit-overflow-scrolling: touch; padding: calc(var(--sat) + 8px) 16px 10px; outline: none; }
+#view { flex: 1; min-height: 0; overflow-y: auto; overscroll-behavior: none; -webkit-overflow-scrolling: touch; padding: calc(var(--sat) + 8px) 16px 10px; outline: none; }
+#view.lock { overflow: hidden; } /* เนื้อหาพอดีจอ: ไม่ให้เลื่อนเลย */
 #tabs { flex: none; display: flex; background: var(--bg2); border-top: 1px solid var(--line); padding: 6px 4px calc(var(--sab) + 4px); }
 #tabs button { flex: 1; display: flex; flex-direction: column; align-items: center; gap: 2px; background: none; border: 0; padding: 4px 0; color: var(--muted); font-size: 11px; min-height: 48px; }
 #tabs button[aria-current="page"] { color: var(--exp); font-weight: 600; }
@@ -90,7 +93,8 @@ h1, h2, h3, p { margin: 0; }
 .section-title { font-size: 13px; font-weight: 600; color: var(--muted); margin: 8px 2px -2px; }
 
 /* ---------- หน้าบันทึก ---------- */
-.entry { display: flex; flex-direction: column; gap: 6px; min-height: 100%; }
+.entry { display: flex; flex-direction: column; gap: 6px; height: 100%; }
+.entry > * { flex: none; }
 .topstrip { display: flex; align-items: center; gap: 8px; min-height: 40px; }
 .topstrip .sum { flex: 1; font-size: 13px; color: var(--muted); }
 .topstrip .sum b { color: var(--text); font-weight: 600; }
@@ -124,7 +128,7 @@ h1, h2, h3, p { margin: 0; }
 .dots span { width: 6px; height: 6px; border-radius: 3px; background: #3A3F48; transition: width .2s; }
 .dots span.on { width: 16px; background: var(--text); }
 .subrow .chip[aria-pressed="true"] { background: var(--s3); border-color: var(--text2); color: var(--text); }
-.keypad { display: flex; gap: 6px; height: 216px; flex: none; }
+.entry > .keypad { display: flex; gap: 6px; flex: 1 1 216px; min-height: 180px; max-height: 300px; } /* แป้นยืดหดตามพื้นที่ที่เหลือ หน้าบันทึกจึงพอดีจอ */
 .keypad .ops { flex: 0 0 calc((100% - 18px) / 4); display: flex; flex-direction: column; gap: 6px; }
 .keypad .digits { flex: 1; display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); grid-template-rows: repeat(4, minmax(0, 1fr)); gap: 6px; }
 .key { border: 0; border-radius: 12px; background: var(--s1); color: var(--text); font-size: 22px; font-weight: 500; min-height: 0; }
@@ -132,6 +136,9 @@ h1, h2, h3, p { margin: 0; }
 .ops .key { flex: 1; background: var(--s2); color: var(--exp); font-size: 20px; }
 .entry.income .ops .key { color: var(--inc); }
 .save { height: 50px; flex: none; }
+.saved-bar { height: 50px; display: flex; align-items: center; gap: 8px; padding: 0 6px 0 14px; border-radius: var(--r); background: #15301F; border: 1px solid #23573A; color: #7EE2A8; font-size: 15px; animation: fade .15s; }
+.saved-bar span { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.saved-bar button { height: 38px; padding: 0 14px; border: 0; border-radius: 10px; background: rgba(255,255,255,.08); color: var(--text); font-weight: 600; font-size: 14px; }
 
 /* ---------- หน้าสรุป ---------- */
 .month-nav { display: flex; align-items: center; gap: 4px; min-height: 44px; }
@@ -203,9 +210,11 @@ h1, h2, h3, p { margin: 0; }
 .dialog .btns { display: grid; grid-auto-flow: column; grid-auto-columns: 1fr; gap: 8px; }
 .dialog .btns.vertical { grid-auto-flow: row; }
 .dialog input, .dialog select { height: 48px; border-radius: 12px; border: 1px solid #3A3F48; background: var(--bg); padding: 0 12px; font-size: 16px; color: var(--text); width: 100%; }
-.toast-wrap { position: fixed; left: 10px; right: 10px; bottom: calc(var(--sab) + 6px); z-index: 70; display: flex; justify-content: center; pointer-events: none; }
+.toast-wrap { position: fixed; left: 12px; right: 12px; bottom: calc(var(--sab) + 70px); z-index: 70; display: flex; justify-content: center; pointer-events: none; }
 .toast { pointer-events: auto; display: flex; align-items: center; gap: 12px; max-width: 420px; width: 100%; min-height: 48px; padding: 6px 6px 6px 14px; border-radius: 14px; background: #2A2E36; color: var(--text); font-size: 14px; box-shadow: 0 8px 24px rgba(0, 0, 0, .4); animation: up .18s ease; }
 .toast span { flex: 1; }
+.toast { touch-action: none; transition: transform .15s ease, opacity .15s ease; }
+.toast.gone { transform: translateY(40px); opacity: 0; }
 .toast button { height: 36px; padding: 0 12px; border: 0; border-radius: 10px; background: var(--s3); color: var(--exp-text); font-weight: 600; font-size: 14px; }
 .drag-handle { width: 36px; height: 44px; border: 0; background: none; color: var(--faint); display: flex; align-items: center; justify-content: center; touch-action: none; flex: none; }
 .dragging { opacity: .85; background: var(--s3) !important; position: relative; z-index: 2; }

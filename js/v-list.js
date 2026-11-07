@@ -3,7 +3,7 @@ import * as S from './store.js';
 import { D } from './store.js';
 import * as U from './util.js';
 import { esc } from './util.js';
-import { UI, on, onInput, onChange, registerView, registerSheet, render, renderSheet, afterRender, openSheet, closeSheet, sheetHead, toast, ask, confirm, m, svg, ICON, optionsHtml, suppressNextClick } from './ui.js';
+import { UI, on, onInput, onChange, registerView, registerSheet, render, renderSheet, afterRender, openSheet, closeSheet, sheetHead, toast, ask, confirm, m, svg, ICON, optionsHtml, suppressNextClick, updateLock } from './ui.js';
 import { catName, catColor, txMeta, txTitle, tripName, catOptions, subOptions, channelOptions } from './common.js';
 
 UI.list = { month: U.thisMonth(), q: '', pending: false, catId: '', channelId: '', tripId: '', day: '', selecting: false, sel: new Set(), swiped: null };
@@ -20,7 +20,7 @@ function filtered() {
     if (L.channelId && t.channelId !== L.channelId) return false;
     if (L.tripId && t.tripId !== L.tripId) return false;
     if (q) {
-      const hay = [t.note, catName(t.catId, ''), t.subId ? catName(t.subId, '') : '', S.channel(t.channelId)?.name || '', tripName(t.tripId), String(t.amount)].join(' ').toLowerCase();
+      const hay = [txTitle(t), catName(t.catId, ''), t.subId ? catName(t.subId, '') : '', S.channel(t.channelId)?.name || '', tripName(t.tripId), String(t.amount)].join(' ').toLowerCase();
       if (!hay.includes(q)) return false;
     }
     return true;
@@ -45,7 +45,7 @@ function rowHtml(t) {
       ${L.selecting ? `<span class="check ${sel ? 'on' : ''}">${sel ? svg(ICON.check, 14) : ''}</span>` : ''}
       <span class="emoji" style="${c ? '' : 'background:#2A2016'}">${esc(c ? (c.emoji || '•') : '?')}</span>
       <span class="info">
-        <span class="nt" style="${t.note ? '' : 'color:var(--muted)'}">${esc(txTitle(t))}</span>
+        <span class="nt" style="${t.note || t.planSeq ? '' : 'color:var(--muted)'}">${esc(txTitle(t))}</span>
         <span class="mt">${tags.join('')}<span>${esc(txMeta(t) || (S.channel(t.channelId)?.name || ''))}</span></span>
       </span>
       <span class="am ${t.type === 'income' ? 'money-inc' : ''}">${m(t.amount, t.type === 'income' ? '+' : '−')}</span>
@@ -116,7 +116,7 @@ registerView('list', () => {
 });
 
 // ---------- ค้นหา/กรอง ----------
-onInput('listQ', (el) => { UI.list.q = el.value; UI.list.limit = 300; document.getElementById('list-results').innerHTML = resultsHtml(); });
+onInput('listQ', (el) => { UI.list.q = el.value; UI.list.limit = 300; document.getElementById('list-results').innerHTML = resultsHtml(); updateLock(); });
 on('listMonth', (el) => { UI.list.month = U.addMonths(UI.list.month, Number(el.dataset.v)); UI.list.day = ''; render(); });
 on('listClear', () => { Object.assign(UI.list, { pending: false, catId: '', channelId: '', tripId: '', day: '' }); render(); });
 on('listPending', () => { UI.list.pending = !UI.list.pending; render(); });
@@ -177,7 +177,7 @@ on('swipeDelete', async (el) => {
 // ---------- ปัดซ้าย + กดค้าง ----------
 async function duplicateToday(t) {
   const trip = S.activeTrip();
-  const n = S.newTx({ type: t.type, amount: t.amount, catId: t.catId, subId: t.subId, channelId: t.channelId, note: t.note, date: U.today(), tripId: trip ? trip.id : null });
+  const n = S.newTx({ type: t.type, amount: t.amount, catId: t.catId, subId: t.subId, channelId: t.channelId, note: t.planSeq ? txTitle(t) : t.note, date: U.today(), tripId: trip ? trip.id : null });
   await S.putTx(n);
   toast(`ลงซ้ำวันนี้แล้ว ${m(n.amount)}`, { label: 'เลิกทำ', fn: async () => { await S.deleteTx([n.id]); render(); } });
   render();

@@ -37,7 +37,20 @@ export async function init() {
     ]);
   }
   Object.assign(D, { tx: all.tx, cats: all.cats, channels: all.channels, plans: all.plans, recurring: all.recurring, favs: all.favs, trips: all.trips, settings });
+  await migrate();
   await runRecurring();
+}
+
+// v1.1: งวดผ่อนเก่าเก็บ "ชื่อ (งวด x/n)" ไว้ในโน้ต ย้ายออกให้โน้ตเหลือเฉพาะที่ผู้ใช้พิมพ์เอง
+async function migrate() {
+  const ops = [];
+  for (const t of D.tx) {
+    if (!t.planSeq || !t.note) continue;
+    const p = t.planId ? plan(t.planId) : null;
+    const auto = planAutoNote(p ? p.name : t.planName, t.planSeq);
+    if (t.note === auto || /^.+ \((งวด \d+\/\d+|ปิดยอด)\)$/.test(t.note) && t.note.startsWith(t.planName || '\u0000')) { t.note = ''; ops.push({ store: 'tx', put: t }); }
+  }
+  if (ops.length) await db.write(ops);
 }
 
 export async function resetAll() {
@@ -191,6 +204,10 @@ export function tripNameTaken(name, exceptId = null) {
 }
 
 // ---------- ผ่อน ----------
+// ข้อความที่แอปเติมให้งวดผ่อนอัตโนมัติ เช่น "Test (งวด 1/10)"
+export function planAutoNote(name, seq) {
+  return seq === 'ปิดยอด' ? `${name} (ปิดยอด)` : `${name} (งวด ${seq})`;
+}
 // สร้างตารางงวด: amounts แบ่งจากยอดรวม (เศษไปงวดสุดท้าย) หรือใช้ยอดต่องวดเท่ากันทุกงวด
 export function buildSchedule({ mode, amount, count, firstDate }) {
   const day = Number(firstDate.slice(8, 10));
@@ -204,13 +221,13 @@ export function buildSchedule({ mode, amount, count, firstDate }) {
   return amounts.map((a, i) => ({ date: clampDate(addMonths(startYm, i), day), amount: a, txId: null }));
 }
 
-export async function createPlan({ name, mode, amount, count, firstDate, catId, subId, channelId }) {
+export async function createPlan({ name, note = '', mode, amount, count, firstDate, catId, subId, channelId }) {
   const p = {
-    id: uid('i'), name, catId, subId, channelId, day: Number(firstDate.slice(8, 10)),
+    id: uid('i'), name, note, catId, subId, channelId, day: Number(firstDate.slice(8, 10)),
     schedule: buildSchedule({ mode, amount, count, firstDate }), closedAt: null, createdAt: Date.now(),
   };
   const txs = p.schedule.map((s, i) => {
-    const t = newTx({ type: 'expense', amount: s.amount, catId, subId, channelId, date: s.date, note: `${name} (งวด ${i + 1}/${count})`, planId: p.id, planName: name, planSeq: `${i + 1}/${count}` });
+    const t = newTx({ type: 'expense', amount: s.amount, catId, subId, channelId, date: s.date, note, planId: p.id, planName: name, planSeq: `${i + 1}/${count}` });
     s.txId = t.id;
     return t;
   });
@@ -230,17 +247,18 @@ export function planStats(p, ref = today()) {
 }
 
 // แก้งวดที่ยังไม่ถึงวัน (ยอด หมวด ช่องทาง ชื่อ)
-export async function editPlanFuture(p, { name, amount, catId, subId, channelId }) {
+export async function editPlanFuture(p, { name, note = '', amount, catId, subId, channelId }) {
   const ref = today();
   const ops = [];
-  p.name = name; p.catId = catId; p.subId = subId; p.channelId = channelId;
-  const n = p.schedule.length;
-  p.schedule.forEach((s, i) => {
+  const oldNote = p.note || '';
+  p.name = name; p.note = note; p.catId = catId; p.subId = subId; p.channelId = channelId;
+  p.schedule.forEach((s) => {
     if (s.date <= ref) return;
     if (amount != null) s.amount = round2(amount);
     const t = s.txId && D.tx.find((x) => x.id === s.txId);
     if (t) {
-      Object.assign(t, { amount: s.amount, catId, subId, channelId, planName: name, note: `${name} (งวด ${i + 1}/${n})` });
+      Object.assign(t, { amount: s.amount, catId, subId, channelId, planName: name });
+      if ((t.note || '') === oldNote) t.note = note; // งวดที่ไม่ได้แก้โน้ตเอง ให้ใช้โน้ตใหม่
       ops.push({ store: 'tx', put: t });
     }
   });
@@ -254,7 +272,7 @@ export async function closePlanEarly(p, payoffAmount, date = today()) {
   const delIds = future.map((s) => s.txId).filter(Boolean);
   const paidCount = p.schedule.length - future.length;
   p.schedule = p.schedule.filter((s) => s.date <= date);
-  const t = newTx({ type: 'expense', amount: round2(payoffAmount), catId: p.catId, subId: p.subId, channelId: p.channelId, date, note: `${p.name} (ปิดยอด)`, planId: p.id, planName: p.name, planSeq: 'ปิดยอด' });
+  const t = newTx({ type: 'expense', amount: round2(payoffAmount), catId: p.catId, subId: p.subId, channelId: p.channelId, date, note: p.note || '', planId: p.id, planName: p.name, planSeq: 'ปิดยอด' });
   p.schedule.push({ date, amount: t.amount, txId: t.id, payoff: true });
   p.closedAt = Date.now();
   D.tx = D.tx.filter((x) => !delIds.includes(x.id));

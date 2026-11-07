@@ -1,8 +1,8 @@
 // ส่งออกเป็น Excel (ตาราง Excel Table พร้อมทำ Pivot) / CSV และนำเข้ากลับ
-import { D, cat, channel, trip, plan, newTx } from './store.js';
+import { D, cat, channel, trip, plan, newTx, planAutoNote } from './store.js';
 import { uid, ymd, round2 } from './util.js';
 
-export const COLUMNS = ['รหัส', 'วันที่', 'ปี', 'เดือน', 'ประเภท', 'หมวด', 'หมวดย่อย', 'ช่องทาง', 'ยอด', 'ยอดสุทธิ', 'รายการผ่อน', 'งวด', 'ทริป', 'โน้ต'];
+export const COLUMNS = ['วันที่', 'ปี', 'เดือน', 'ประเภท', 'หมวด', 'หมวดย่อย', 'ช่องทาง', 'ยอด', 'ยอดสุทธิ', 'รายการผ่อน', 'งวด', 'ทริป', 'โน้ต', 'รหัส'];
 
 function loadExcelJS() {
   if (window.ExcelJS) return Promise.resolve(window.ExcelJS);
@@ -20,6 +20,13 @@ export function txInRange(from, to) { // from/to = 'YYYY-MM' (รวมทั้
     .sort((a, b) => (a.date === b.date ? a.createdAt - b.createdAt : a.date < b.date ? -1 : 1));
 }
 
+// โน้ตในไฟล์: งวดผ่อน = "โน้ตที่พิมพ์ - ชื่อผ่อน (งวด x/n)" ถ้าไม่มีโน้ตก็แสดงแค่ส่วนหลัง
+function exportNote(t, p) {
+  if (!t.planSeq) return t.note || '';
+  const auto = planAutoNote(p ? p.name : (t.planName || ''), t.planSeq);
+  return t.note ? `${t.note} - ${auto}` : auto;
+}
+
 function rowOf(t) {
   const c = t.catId ? cat(t.catId) : null;
   const s = t.subId ? cat(t.subId) : null;
@@ -31,12 +38,12 @@ function rowOf(t) {
     id: t.id, date: new Date(Date.UTC(y, m - 1, d)), dateStr: t.date, year: y, month: t.date.slice(0, 7),
     type: t.type === 'income' ? 'รายรับ' : 'รายจ่าย', cat: c ? c.name : '', sub: s ? s.name : '',
     channel: ch ? ch.name : '', amount: t.amount, net: t.type === 'income' ? t.amount : -t.amount,
-    plan: p ? p.name : (t.planName || ''), seq: t.planSeq || '', trip: tr ? tr.name : '', note: t.note || '',
+    plan: p ? p.name : (t.planName || ''), seq: t.planSeq || '', trip: tr ? tr.name : '', note: exportNote(t, p),
   };
 }
 
 export function fileName(from, to, ext) {
-  return from === to ? `รายรับรายจ่าย_${from}.${ext}` : `รายรับรายจ่าย_${from}_${to}.${ext}`;
+  return from === to ? `rayrub-rayjai_${from}.${ext}` : `rayrub-rayjai_${from}_${to}.${ext}`;
 }
 
 export async function buildXlsx(list) {
@@ -45,18 +52,20 @@ export async function buildXlsx(list) {
   wb.creator = 'รายรับ-รายจ่าย';
   wb.created = new Date();
   const ws = wb.addWorksheet('รายการ', { views: [{ state: 'frozen', ySplit: 1 }] });
-  const rows = list.map(rowOf).map((r) => [r.id, r.date, r.year, r.month, r.type, r.cat, r.sub, r.channel, r.amount, r.net, r.plan, r.seq, r.trip, r.note]);
+  // ช่องที่ไม่มีค่าให้ว่างจริง (null) ไม่ใช่ข้อความว่าง เพื่อให้ตัวกรอง "(ว่าง)" และ Pivot จับได้
+  const blank = (v) => (v === '' ? null : v);
+  const rows = list.map(rowOf).map((r) => [r.date, r.year, r.month, r.type, r.cat, r.sub, r.channel, r.amount, r.net, r.plan, r.seq, r.trip, r.note, r.id].map(blank));
   ws.addTable({
     name: 'Transactions', ref: 'A1', headerRow: true, totalsRow: false,
     style: { theme: 'TableStyleMedium2', showRowStripes: true },
     columns: COLUMNS.map((name) => ({ name, filterButton: true })),
     rows,
   });
-  const widths = [16, 12, 7, 9, 9, 14, 14, 12, 12, 12, 16, 8, 16, 30];
+  const widths = [12, 7, 9, 9, 14, 14, 12, 12, 12, 16, 8, 16, 34, 16];
   widths.forEach((w, i) => { ws.getColumn(i + 1).width = w; });
-  ws.getColumn(2).numFmt = 'yyyy-mm-dd';
-  ws.getColumn(9).numFmt = '#,##0.00';
-  ws.getColumn(10).numFmt = '#,##0.00;-#,##0.00';
+  ws.getColumn(1).numFmt = 'yyyy-mm-dd';
+  ws.getColumn(8).numFmt = '#,##0.00';
+  ws.getColumn(9).numFmt = '#,##0.00;-#,##0.00';
   const buf = await wb.xlsx.writeBuffer();
   return new Blob([buf], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
 }
@@ -67,7 +76,7 @@ function csvCell(v) {
 }
 export function buildCsv(list) {
   const lines = [COLUMNS.join(',')];
-  for (const r of list.map(rowOf)) lines.push([r.id, r.dateStr, r.year, r.month, r.type, r.cat, r.sub, r.channel, r.amount, r.net, r.plan, r.seq, r.trip, r.note].map(csvCell).join(','));
+  for (const r of list.map(rowOf)) lines.push([r.dateStr, r.year, r.month, r.type, r.cat, r.sub, r.channel, r.amount, r.net, r.plan, r.seq, r.trip, r.note, r.id].map(csvCell).join(','));
   return new Blob(['﻿' + lines.join('\r\n')], { type: 'text/csv;charset=utf-8' });
 }
 
@@ -175,10 +184,15 @@ export async function prepareImport(file) {
       if (!tr) { tr = { id: uid('p'), name: tName, startedAt: Date.now(), endedAt: Date.now() }; newTrips.push(tr); }
       tripId = tr.id;
     }
-    const t = newTx({
-      id: id || uid('t'), type, amount, catId, subId, channelId, date, note: String(get(r, 'โน้ต') || ''),
-      tripId, planName: String(get(r, 'รายการผ่อน') || '') || null, planSeq: String(get(r, 'งวด') || '') || null,
-    });
+    const planName = String(get(r, 'รายการผ่อน') || '').trim() || null;
+    const planSeq = String(get(r, 'งวด') || '').trim() || null;
+    let note = String(get(r, 'โน้ต') || '');
+    if (planName && planSeq) { // ตัดส่วน "ชื่อผ่อน (งวด x/n)" ที่แอปเติมให้ออก เหลือแค่โน้ตที่พิมพ์เอง
+      const auto = planAutoNote(planName, planSeq);
+      if (note === auto) note = '';
+      else if (note.endsWith(' - ' + auto)) note = note.slice(0, -(auto.length + 3));
+    }
+    const t = newTx({ id: id || uid('t'), type, amount, catId, subId, channelId, date, note, tripId, planName, planSeq });
     existing.add(t.id);
     tx.push(t);
   }

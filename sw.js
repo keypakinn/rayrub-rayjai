@@ -1,6 +1,6 @@
 // Service worker: เก็บไฟล์ของแอปไว้ในเครื่อง ใช้งานออฟไลน์ได้
 // เปลี่ยน VERSION ทุกครั้งที่อัปเดตแอป เพื่อให้แอปแจ้ง "มีเวอร์ชันใหม่"
-const VERSION = 'v1.0.0';
+const VERSION = 'v1.1.0';
 const CACHE = 'rr-' + VERSION;
 const FILES = [
   './', 'index.html', 'app.css', 'manifest.webmanifest',

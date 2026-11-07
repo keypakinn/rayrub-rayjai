@@ -26,7 +26,16 @@ export function render() {
   document.getElementById('tabs').innerHTML = tabsHtml();
   renderSheet();
   for (const h of afterHooks) h();
+  updateLock();
 }
+// เนื้อหาพอดีจอ → ล็อกไม่ให้เลื่อน (กันหน้าจอเด้งจนกดอะไรไม่ได้)
+export function updateLock() {
+  const v = document.getElementById('view');
+  if (!v) return;
+  v.classList.remove('lock');
+  if (v.scrollHeight <= v.clientHeight + 1) v.classList.add('lock');
+}
+window.addEventListener('resize', () => updateLock());
 export function renderSheet() {
   const root = document.getElementById('sheet-root');
   if (!UI.sheet) { root.innerHTML = ''; delete root.dataset.kind; return; }
@@ -117,17 +126,34 @@ export async function confirm(title, body, okLabel = 'ตกลง', danger = fa
 }
 
 // ---------- ข้อความแจ้ง ----------
+// แถบแจ้งเตือนลอยเหนือเมนูด้านล่าง: แตะหรือปัดลงเพื่อปิด, หายเองใน 2.5 วิ (มีปุ่มเลิกทำ 4 วิ)
 let toastTimer = null;
-export function toast(msg, action = null, ms = 5000) {
+function hideToast() {
+  const root = document.getElementById('toast-root');
+  const el = root.querySelector('.toast');
+  clearTimeout(toastTimer);
+  if (!el) return;
+  el.classList.add('gone');
+  setTimeout(() => { if (root.contains(el)) root.innerHTML = ''; }, 160);
+}
+export function toast(msg, action = null, ms = null) {
   const root = document.getElementById('toast-root');
   clearTimeout(toastTimer);
   root.innerHTML = `<div class="toast-wrap"><div class="toast" role="status"><span>${esc(msg)}</span>${action ? `<button data-toast="1">${esc(action.label)}</button>` : ''}</div></div>`;
-  root.onclick = async (ev) => {
-    if (!ev.target.closest('[data-toast]')) return;
-    root.innerHTML = '';
-    await action.fn();
+  const el = root.querySelector('.toast');
+  el.onclick = async (ev) => {
+    if (ev.target.closest('[data-toast]')) { root.innerHTML = ''; clearTimeout(toastTimer); await action.fn(); return; }
+    hideToast();
   };
-  toastTimer = setTimeout(() => { root.innerHTML = ''; }, ms);
+  let y0 = null;
+  el.addEventListener('touchstart', (ev) => { y0 = ev.touches[0].clientY; el.style.transition = 'none'; }, { passive: true });
+  el.addEventListener('touchmove', (ev) => { if (y0 === null) return; const dy = Math.max(0, ev.touches[0].clientY - y0); el.style.transform = `translateY(${dy}px)`; el.style.opacity = String(Math.max(0.2, 1 - dy / 80)); }, { passive: true });
+  el.addEventListener('touchend', (ev) => {
+    if (y0 === null) return;
+    const dy = ev.changedTouches[0].clientY - y0; y0 = null; el.style.transition = '';
+    if (dy > 30) { el.style.transform = ''; el.style.opacity = ''; hideToast(); } else { el.style.transform = ''; el.style.opacity = ''; }
+  });
+  toastTimer = setTimeout(hideToast, ms || (action ? 4000 : 2500));
 }
 
 // ---------- ตัวจัดการเหตุการณ์ส่วนกลาง ----------
