@@ -232,4 +232,8 @@ h1, h2, h3, p { margin: 0; }
 @keyframes down { from { transform: translateY(-16px); opacity: .6; } to { transform: none; opacity: 1; } }
 .no-anim, .no-anim .sheet { animation: none !important; }
 .tag { flex: none; }
+.install-arrow { display: flex; flex-direction: column; align-items: center; gap: 4px; color: var(--inc-text); padding-top: 4px; }
+.install-arrow svg { animation: nudge 1.1s ease-in-out infinite; }
+@keyframes nudge { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(8px); } }
+@media (prefers-reduced-motion: reduce) { .install-arrow svg { animation: none; } }
 @keyframes fade { from { opacity: 0; } to { opacity: 1; } }

@@ -6,6 +6,7 @@ import './v-summary.js';
 import './v-list.js';
 import './v-plans.js';
 import { settingsAfterRender } from './v-settings.js';
+import { maybeShowInstallGuide } from './v-install.js';
 
 afterRender(settingsAfterRender);
 
@@ -18,6 +19,7 @@ async function start() {
     return;
   }
   render();
+  maybeShowInstallGuide();
   registerSW();
   // กลับมาเปิดแอปวันใหม่: ลงรายการประจำที่ถึงกำหนด และอัปเดตวันที่ "วันนี้"
   let lastDay = new Date().toDateString();

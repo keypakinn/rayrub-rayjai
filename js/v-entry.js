@@ -165,12 +165,6 @@ onChange('pickDate', (el) => { if (el.value) { E().date = el.value; render(); } 
 onChange('entryChannel', (el) => { E().channelId = el.value; render(); });
 on('toggleHide', async () => { await S.saveSettings({ hideAmounts: !D.settings.hideAmounts }); render(); });
 on('goPending', () => { UI.list = { ...UI.list, pending: true, q: '', catId: '', channelId: '', tripId: '', day: '' }; goTab('list'); });
-on('installHelp', () => ask({
-  title: 'เพิ่มลงหน้าจอโฮม',
-  body: '1. เปิดหน้านี้ใน Safari\n2. แตะปุ่มแชร์ (สี่เหลี่ยมมีลูกศรชี้ขึ้น)\n3. เลือก "เพิ่มไปยังหน้าจอโฮม"\n4. ต่อจากนี้เปิดแอปจากไอคอนเท่านั้น\n\nข้อมูลใน Safari กับในไอคอนแยกกัน และ Safari อาจลบข้อมูลเองถ้าไม่ได้ใช้นาน',
-  buttons: [{ label: 'เข้าใจแล้ว', value: true, kind: 'primary' }],
-}));
-
 onInput('note', (el) => {
   const e = E(); e.note = el.value; e.noteFocus = true;
   document.getElementById('suggest').innerHTML = suggestHtml();
