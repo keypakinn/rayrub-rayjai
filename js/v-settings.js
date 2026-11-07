@@ -7,7 +7,7 @@ import { UI, on, onInput, onChange, registerView, registerSheet, render, renderS
 import { catName, isStandalone } from './common.js';
 import * as X from './excel.js';
 
-export const APP_VERSION = '1.2.0';
+export const APP_VERSION = '1.3.0';
 
 registerView('settings', () => {
   const st = D.settings;

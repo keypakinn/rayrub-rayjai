@@ -236,4 +236,12 @@ h1, h2, h3, p { margin: 0; }
 .install-arrow svg { animation: nudge 1.1s ease-in-out infinite; }
 @keyframes nudge { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(8px); } }
 @media (prefers-reduced-motion: reduce) { .install-arrow svg { animation: none; } }
+.chart-card { background: var(--s1); border-radius: 16px; padding: 12px 12px 14px; display: flex; flex-direction: column; gap: 10px; }
+.chip.sm { height: 30px; padding: 0 12px; border-radius: 15px; }
+.chart-note { font-size: 13px; color: var(--text2); }
+.chart-note b { font-weight: 600; }
+.legend { display: flex; flex-wrap: wrap; gap: 4px 12px; font-size: 11px; color: var(--muted); }
+.legend span { display: inline-flex; align-items: center; gap: 4px; }
+.legend i { display: inline-block; width: 14px; height: 0; }
+.chart text { font-family: inherit; }
 @keyframes fade { from { opacity: 0; } to { opacity: 1; } }

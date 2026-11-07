@@ -164,7 +164,7 @@ on('setDate', (el) => { const e = E(); e.date = el.dataset.v === 'today' ? U.tod
 onChange('pickDate', (el) => { if (el.value) { E().date = el.value; render(); } });
 onChange('entryChannel', (el) => { E().channelId = el.value; render(); });
 on('toggleHide', async () => { await S.saveSettings({ hideAmounts: !D.settings.hideAmounts }); render(); });
-on('goPending', () => { UI.list = { ...UI.list, pending: true, q: '', catId: '', channelId: '', tripId: '', day: '' }; goTab('list'); });
+on('goPending', () => { UI.list = { ...UI.list, pending: true, q: '', catId: '', channelId: '', tripId: '', day: '', year: '' }; goTab('list'); });
 onInput('note', (el) => {
   const e = E(); e.note = el.value; e.noteFocus = true;
   document.getElementById('suggest').innerHTML = suggestHtml();

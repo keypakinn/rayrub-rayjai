@@ -6,13 +6,14 @@ import { esc } from './util.js';
 import { UI, on, onInput, onChange, registerView, registerSheet, render, renderSheet, afterRender, openSheet, closeSheet, sheetHead, toast, ask, confirm, m, svg, ICON, optionsHtml, suppressNextClick, updateLock } from './ui.js';
 import { catName, catColor, txMeta, txTitle, tripName, catOptions, subOptions, channelOptions } from './common.js';
 
-UI.list = { month: U.thisMonth(), q: '', pending: false, catId: '', channelId: '', tripId: '', day: '', selecting: false, sel: new Set(), swiped: null };
+UI.list = { month: U.thisMonth(), year: '', q: '', pending: false, catId: '', channelId: '', tripId: '', day: '', selecting: false, sel: new Set(), swiped: null };
 
 function filtered() {
   const L = UI.list;
   const q = L.q.trim().toLowerCase();
-  const allMonths = !!q || !!L.tripId || L.pending;
+  const allMonths = !!q || !!L.tripId || L.pending || !!L.year;
   return D.tx.filter((t) => {
+    if (L.year && t.date.slice(0, 4) !== L.year) return false;
     if (!allMonths && t.date.slice(0, 7) !== L.month) return false;
     if (L.day && t.date !== L.day) return false;
     if (L.pending && t.catId) return false;
@@ -78,8 +79,8 @@ function resultsHtml() {
 registerView('list', () => {
   const L = UI.list;
   const pending = D.tx.filter((t) => !t.catId).length;
-  const allMonths = !!L.q.trim() || !!L.tripId || L.pending;
-  const noFilter = !L.pending && !L.catId && !L.channelId && !L.tripId && !L.day;
+  const allMonths = !!L.q.trim() || !!L.tripId || L.pending || !!L.year;
+  const noFilter = !L.pending && !L.catId && !L.channelId && !L.tripId && !L.day && !L.year;
   const catOpts = [...catOptions('expense'), ...catOptions('income')];
   return `<div class="stack" style="gap:10px;padding-bottom:${L.selecting ? '80px' : '0'}">
     <div class="row" style="min-height:44px">
@@ -87,7 +88,7 @@ registerView('list', () => {
         ? `<h1 class="h1" style="flex:1">เลือกแล้ว ${L.sel.size}</h1><button class="link" data-a="selAll">เลือกทั้งหมด</button><button class="link" data-a="selDone" style="color:var(--exp);font-weight:600">เสร็จ</button>`
         : `<h1 class="h1" style="flex:1">รายการ</h1><button class="link" data-a="selStart">เลือกหลายรายการ</button>`}
     </div>
-    ${allMonths ? '<div class="small muted">ค้นหาทุกเดือน</div>' : `<div class="month-nav" style="min-height:36px">
+    ${allMonths ? `<div class="small muted">${L.year ? `ทั้งปี ${esc(L.year)}` : 'ค้นหาทุกเดือน'}</div>` : `<div class="month-nav" style="min-height:36px">
       <button class="icon-btn plain" data-a="listMonth" data-v="-1" aria-label="เดือนก่อน">${svg(ICON.left)}</button>
       <h1 style="font-size:16px">${U.fmtMonth(L.month, true)}</h1>
       <button class="icon-btn plain" data-a="listMonth" data-v="1" aria-label="เดือนถัดไป">${svg(ICON.right)}</button></div>`}
@@ -97,6 +98,7 @@ registerView('list', () => {
     <div class="chips">
       <button class="chip" data-a="listClear" aria-pressed="${noFilter}">ทั้งหมด</button>
       ${pending || L.pending ? `<button class="chip warn" data-a="listPending" aria-pressed="${L.pending}">รอจัดหมวด <b>${pending}</b></button>` : ''}
+      ${L.year ? `<button class="chip" aria-pressed="true" data-a="listYearClear">ปี ${esc(L.year)} ✕</button>` : ''}
       ${L.day ? `<button class="chip" aria-pressed="true" data-a="listDayClear">${esc(U.fmtDate(L.day, false))} ✕</button>` : ''}
       <label class="chip has-select" aria-pressed="${!!L.catId}">${L.catId ? esc(catName(L.catId)) : 'หมวด'} ${svg(ICON.down, 14)}
         <select data-ch="listCat" aria-label="กรองหมวด">${optionsHtml(catOpts, L.catId, { none: 'ทุกหมวด' })}</select></label>
@@ -118,7 +120,8 @@ registerView('list', () => {
 // ---------- ค้นหา/กรอง ----------
 onInput('listQ', (el) => { UI.list.q = el.value; UI.list.limit = 300; document.getElementById('list-results').innerHTML = resultsHtml(); updateLock(); });
 on('listMonth', (el) => { UI.list.month = U.addMonths(UI.list.month, Number(el.dataset.v)); UI.list.day = ''; render(); });
-on('listClear', () => { Object.assign(UI.list, { pending: false, catId: '', channelId: '', tripId: '', day: '' }); render(); });
+on('listClear', () => { Object.assign(UI.list, { pending: false, catId: '', channelId: '', tripId: '', day: '', year: '' }); render(); });
+on('listYearClear', () => { UI.list.year = ''; render(); });
 on('listPending', () => { UI.list.pending = !UI.list.pending; render(); });
 on('listDayClear', () => { UI.list.day = ''; render(); });
 on('moreRows', () => { UI.list.limit = (UI.list.limit || 300) + 300; render(); });
